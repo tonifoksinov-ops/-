@@ -1,0 +1,945 @@
+using System; 
+
+using System.Collections.Generic; 
+
+using System.Runtime.InteropServices; 
+
+using System.Text; 
+
+  
+
+namespace NortonCommanderClone 
+
+{ 
+
+    class FileEntry 
+
+    { 
+
+        public string Name; 
+
+        public string Ext; 
+
+        public bool IsDirectory; 
+
+        public long Size; 
+
+        public string Date; 
+
+        public string Time; 
+
+        public bool HasIcon; 
+
+  
+
+        public FileEntry(string name, string ext, bool isDirectory, long size, string date, string time) 
+
+        { 
+
+            Name = name; 
+
+            Ext = ext; 
+
+            IsDirectory = isDirectory; 
+
+            Size = size; 
+
+            Date = date; 
+
+            Time = time; 
+
+        } 
+
+  
+
+        public string ShortName(int maxLen = 8) 
+
+        { 
+
+            if (Name.Length <= maxLen) return Name; 
+
+            return Name.Substring(0, maxLen - 1) + "~"; 
+
+        } 
+
+    } 
+
+  
+
+    class Program 
+
+    { 
+
+        const char TL = '\u2554', TR = '\u2557', BL = '\u255A', BR = '\u255D'; 
+
+        const char H = '\u2550', Vline = '\u2551'; 
+
+        const char TeeDown = '\u2566', TeeUp = '\u2569'; 
+
+        const char TeeRight = '\u2560', TeeLeft = '\u2563', Cross = '\u256C'; 
+
+        const char Shade = '\u2592'; 
+
+        const char VlineSingle = '\u2502'; 
+
+        const char JoinTop = '\u2564'; 
+
+        const char JoinBottom = '\u2567'; 
+
+        const char JoinCross = '\u256A'; 
+
+  
+
+        const int WIDTH = 80; 
+
+        const int HEIGHT = 25; 
+
+        const int MID = 39; 
+
+  
+
+        const int GWL_STYLE = -16; 
+
+        const int WS_THICKFRAME = 0x00040000; 
+
+        const int WS_MAXIMIZEBOX = 0x00010000; 
+
+        const uint SWP_NOSIZE = 0x0001; 
+
+        const uint SWP_NOMOVE = 0x0002; 
+
+        const uint SWP_NOZORDER = 0x0004; 
+
+        const uint SWP_FRAMECHANGED = 0x0020; 
+
+        const uint MF_BYCOMMAND = 0x00000000; 
+
+        const uint SC_SIZE = 0xF000; 
+
+        const uint SC_MAXIMIZE = 0xF030; 
+
+  
+
+        [DllImport("user32.dll")] 
+
+        static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert); 
+
+  
+
+        [DllImport("user32.dll")] 
+
+        static extern bool DeleteMenu(IntPtr hMenu, uint uPosition, uint uFlags); 
+
+  
+
+        [DllImport("user32.dll")] 
+
+        static extern bool DrawMenuBar(IntPtr hWnd); 
+
+  
+
+        [DllImport("kernel32.dll")] 
+
+        static extern IntPtr GetConsoleWindow(); 
+
+  
+
+        [DllImport("user32.dll", SetLastError = true)] 
+
+        static extern int GetWindowLong(IntPtr hWnd, int nIndex); 
+
+  
+
+        [DllImport("user32.dll", SetLastError = true)] 
+
+        static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong); 
+
+  
+
+        [DllImport("user32.dll", SetLastError = true)] 
+
+        static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, 
+
+                                        int x, int y, int cx, int cy, uint flags); 
+
+  
+
+        static void Main() 
+
+        { 
+
+            SetupConsole(); 
+
+  
+
+            BuildData(out var c1, out var c2, out var c3, out var rightList); 
+
+  
+
+            DrawBackground(); 
+
+            DrawTopMenu(); 
+
+            DrawPanelFrame(); 
+
+            DrawLeftDividers(); 
+
+            DrawLeftPanel(c1, c2, c3); 
+
+            DrawRightPanel(rightList); 
+
+            DrawRightDividers(); 
+
+            DrawCommandLine(); 
+
+            DrawFunctionKeys(); 
+
+  
+
+            Console.SetCursorPosition(0, HEIGHT - 1); 
+
+            Console.ResetColor(); 
+
+            Console.ReadKey(true); 
+
+        } 
+
+  
+
+        static void SetupConsole() 
+
+        { 
+
+            Console.OutputEncoding = Encoding.UTF8; 
+
+            Console.CursorVisible = false; 
+
+  
+
+            try { Console.Title = "Norton Commander"; } catch { } 
+
+  
+
+            try 
+
+            { 
+
+                int bufW = Math.Max(Console.BufferWidth, WIDTH); 
+
+                int bufH = Math.Max(Console.BufferHeight, HEIGHT); 
+
+  
+
+                Console.SetBufferSize(bufW, bufH); 
+
+  
+
+                Console.SetWindowSize(WIDTH, HEIGHT); 
+
+  
+
+                Console.SetBufferSize(WIDTH, HEIGHT); 
+
+            } 
+
+            catch 
+
+            { 
+
+  
+
+            } 
+
+  
+
+            LockConsoleWindowSize(); 
+
+        } 
+
+  
+
+        static void LockConsoleWindowSize() 
+
+        { 
+
+            IntPtr hWnd = GetConsoleWindow(); 
+
+            if (hWnd == IntPtr.Zero) return; 
+
+  
+
+            int style = GetWindowLong(hWnd, GWL_STYLE); 
+
+  
+
+            style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX); 
+
+  
+
+            SetWindowLong(hWnd, GWL_STYLE, style); 
+
+  
+
+            IntPtr hMenu = GetSystemMenu(hWnd, false); 
+
+            if (hMenu != IntPtr.Zero) 
+
+            { 
+
+                DeleteMenu(hMenu, SC_SIZE, MF_BYCOMMAND); 
+
+                DeleteMenu(hMenu, SC_MAXIMIZE, MF_BYCOMMAND); 
+
+                DrawMenuBar(hWnd); 
+
+            } 
+
+  
+
+            SetWindowPos( 
+
+                hWnd, 
+
+                IntPtr.Zero, 
+
+                0, 0, 0, 0, 
+
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED 
+
+            ); 
+
+        } 
+
+  
+
+        static void WriteAt(int x, int y, string text, ConsoleColor fg, ConsoleColor bg) 
+
+        { 
+
+            Console.SetCursorPosition(x, y); 
+
+            Console.ForegroundColor = fg; 
+
+            Console.BackgroundColor = bg; 
+
+            Console.Write(text); 
+
+        } 
+
+  
+
+        static void WriteAtWithHighlight(int x, int y, string text, int highlightIndex, 
+
+                                         ConsoleColor highlightFg, ConsoleColor highlightBg, 
+
+                                         ConsoleColor normalFg, ConsoleColor normalBg) 
+
+        { 
+
+            if (highlightIndex > 0) 
+
+            { 
+
+                WriteAt(x, y, text.Substring(0, highlightIndex), normalFg, normalBg); 
+
+            } 
+
+  
+
+            WriteAt(x + highlightIndex, y, text.Substring(highlightIndex, 1), highlightFg, highlightBg); 
+
+  
+
+            if (highlightIndex < text.Length - 1) 
+
+            { 
+
+                WriteAt(x + highlightIndex + 1, y, text.Substring(highlightIndex + 1), normalFg, normalBg); 
+
+            } 
+
+        } 
+
+  
+
+        static void WriteBorderChar(int x, int y, char ch) 
+
+        { 
+
+            WriteAt(x, y, ch.ToString(), ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+        } 
+
+  
+
+        static void DrawBackground() 
+
+        { 
+
+            Console.BackgroundColor = ConsoleColor.DarkBlue; 
+
+            Console.ForegroundColor = ConsoleColor.Gray; 
+
+            string blank = new string(' ', WIDTH); 
+
+            for (int y = 0; y < HEIGHT; y++) 
+
+            { 
+
+                Console.SetCursorPosition(0, y); 
+
+                Console.Write(blank); 
+
+            } 
+
+        } 
+
+  
+
+        static void DrawTopMenu() 
+
+        { 
+
+            ConsoleColor bgColor = ConsoleColor.DarkCyan; 
+
+            ConsoleColor normalFg = ConsoleColor.Black; 
+
+            ConsoleColor highlightFg = ConsoleColor.Yellow; 
+
+  
+
+            WriteAt(0, 0, new string(' ', WIDTH - 6), normalFg, bgColor); 
+
+  
+
+            WriteAtWithHighlight(4, 0, "Левая", 0, highlightFg, bgColor, normalFg, bgColor); 
+
+            WriteAtWithHighlight(13, 0, "Файл", 0, highlightFg, bgColor, normalFg, bgColor); 
+
+            WriteAtWithHighlight(21, 0, "Диск", 0, highlightFg, bgColor, normalFg, bgColor); 
+
+            WriteAtWithHighlight(29, 0, "Команды", 0, highlightFg, bgColor, normalFg, bgColor); 
+
+            WriteAtWithHighlight(40, 0, "Правая", 0, highlightFg, bgColor, normalFg, bgColor); 
+
+  
+
+            WriteAt(WIDTH - 6, 0, " 8:30 ", ConsoleColor.Black, ConsoleColor.Cyan); 
+
+        } 
+
+  
+
+        static void DrawLeftDividers() 
+
+        { 
+
+            for (int y = 2; y <= 19; y++) 
+
+            { 
+
+                if (y == 3) continue; 
+
+                WriteBorderChar(13, y, VlineSingle); 
+
+                WriteBorderChar(26, y, VlineSingle); 
+
+            } 
+
+  
+
+            WriteBorderChar(13, 3, JoinCross); 
+
+            WriteBorderChar(26, 3, JoinCross); 
+
+        } 
+
+  
+
+        static void DrawPanelFrame() 
+
+        { 
+
+            DrawTopBorder(); 
+
+  
+
+            for (int y = 2; y <= 19; y++) 
+
+            { 
+
+                if (y == 3) continue; 
+
+                WriteBorderChar(0, y, Vline); 
+
+                WriteBorderChar(MID, y, Vline); 
+
+                WriteBorderChar(WIDTH - 1, y, Vline); 
+
+            } 
+
+  
+
+            WriteBorderChar(0, 3, TeeRight); 
+
+            for (int x = 1; x < MID; x++) WriteBorderChar(x, 3, H); 
+
+            WriteBorderChar(MID, 3, Cross); 
+
+            for (int x = MID + 1; x < WIDTH - 1; x++) WriteBorderChar(x, 3, H); 
+
+            WriteBorderChar(WIDTH - 1, 3, TeeLeft); 
+
+  
+
+            DrawBottomBorder(); 
+
+        } 
+
+  
+
+        static void DrawTopBorder() 
+
+        { 
+
+            const int y = 1; 
+
+            WriteBorderChar(0, y, TL); 
+
+            for (int x = 1; x < MID; x++) WriteBorderChar(x, y, H); 
+
+            WriteBorderChar(MID, y, TeeDown); 
+
+            for (int x = MID + 1; x < WIDTH - 1; x++) WriteBorderChar(x, y, H); 
+
+            WriteBorderChar(WIDTH - 1, y, TR); 
+
+  
+
+            string title = " C:\\NC "; 
+
+            int leftStart = (MID - title.Length) / 2; 
+
+            int rightStart = MID + (WIDTH - 1 - MID - title.Length) / 2; 
+
+            WriteAt(leftStart, y, title, ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+  
+
+            WriteAt(rightStart, y, title, ConsoleColor.Black, ConsoleColor.Cyan); 
+
+  
+
+            WriteBorderChar(13, y, JoinTop); 
+
+            WriteBorderChar(26, y, JoinTop); 
+
+  
+
+            WriteBorderChar(52, y, JoinTop); 
+
+            WriteBorderChar(63, y, JoinTop); 
+
+            WriteBorderChar(72, y, JoinTop); 
+
+        } 
+
+  
+
+        static void DrawBottomBorder() 
+
+        { 
+
+            const int topY = 20; 
+
+            const int infoY = 21; 
+
+            const int bottomY = 22; 
+
+  
+
+            WriteBorderChar(0, topY, '\u255F'); 
+
+            for (int x = 1; x < MID; x++) WriteBorderChar(x, topY, '\u2500'); 
+
+            WriteBorderChar(13, topY, '\u2534'); 
+
+            WriteBorderChar(26, topY, '\u2534'); 
+
+            WriteBorderChar(MID, topY, '\u256B'); 
+
+            for (int x = MID + 1; x < WIDTH - 1; x++) WriteBorderChar(x, topY, '\u2500'); 
+
+            WriteBorderChar(52, topY, '\u2534'); 
+
+            WriteBorderChar(63, topY, '\u2534'); 
+
+            WriteBorderChar(72, topY, '\u2534'); 
+
+            WriteBorderChar(WIDTH - 1, topY, '\u2562'); 
+
+  
+
+            WriteBorderChar(0, infoY, Vline); 
+
+            WriteBorderChar(MID, infoY, Vline); 
+
+            WriteBorderChar(WIDTH - 1, infoY, Vline); 
+
+  
+
+            string info = "..           \u25B6КАТАЛОГ\u25C0 11.10.02  19:48"; 
+
+            WriteAt(1, infoY, info, ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+            WriteAt(MID + 1, infoY, info, ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+  
+
+            WriteBorderChar(0, bottomY, BL); 
+
+            for (int x = 1; x < MID; x++) WriteBorderChar(x, bottomY, H); 
+
+            WriteBorderChar(MID, bottomY, TeeUp); 
+
+            for (int x = MID + 1; x < WIDTH - 1; x++) WriteBorderChar(x, bottomY, H); 
+
+            WriteBorderChar(WIDTH - 1, bottomY, BR); 
+
+        } 
+
+  
+
+        static void DrawLeftPanel(List<FileEntry> c1, List<FileEntry> c2, List<FileEntry> c3) 
+
+        { 
+
+            int[] colX = { 1, 14, 27 }; 
+
+  
+
+            WriteAt(1, 2, "C:\\", ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+            foreach (int cx in colX) 
+
+                WriteAt(cx + 4, 2, "Имя", ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+  
+
+            for (int row = 0; row < 16; row++) 
+
+            { 
+
+                int y = 4 + row; 
+
+                DrawLeftEntry(colX[0], y, row < c1.Count ? c1[row] : null); 
+
+                DrawLeftEntry(colX[1], y, row < c2.Count ? c2[row] : null); 
+
+                DrawLeftEntry(colX[2], y, row < c3.Count ? c3[row] : null); 
+
+            } 
+
+        } 
+
+  
+
+        static void DrawLeftEntry(int x, int y, FileEntry f) 
+
+        { 
+
+            if (f == null) return; 
+
+  
+
+            ConsoleColor fg = f.IsDirectory ? ConsoleColor.Yellow : ConsoleColor.White; 
+
+            const ConsoleColor bg = ConsoleColor.DarkBlue; 
+
+  
+
+            WriteAt(x, y, f.ShortName().PadRight(8), fg, bg); 
+
+  
+
+            if (f.HasIcon) 
+
+                WriteAt(x + 8, y, Shade.ToString(), fg, bg); 
+
+            else if (!f.IsDirectory) 
+
+                WriteAt(x + 9, y, f.Ext.PadRight(3), fg, bg); 
+
+        } 
+
+  
+
+        static void DrawRightDividers() 
+
+        { 
+
+            for (int y = 2; y <= 19; y++) 
+
+            { 
+
+                if (y == 3) continue; 
+
+                WriteBorderChar(52, y, VlineSingle); 
+
+                WriteBorderChar(63, y, VlineSingle); 
+
+                WriteBorderChar(72, y, VlineSingle); 
+
+            } 
+
+  
+
+            WriteBorderChar(52, 3, JoinCross); 
+
+            WriteBorderChar(63, 3, JoinCross); 
+
+            WriteBorderChar(72, 3, JoinCross); 
+
+        } 
+
+  
+
+        static void DrawRightPanel(List<FileEntry> list) 
+
+        { 
+
+            int rx = MID + 1; 
+
+  
+
+            WriteAt(rx, 2, "C:\\", ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+            WriteAt(rx + 4, 2, "Имя", ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+            WriteAt(rx + 15, 2, "Размер", ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+            WriteAt(rx + 26, 2, "Дата", ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+            WriteAt(rx + 33, 2, "Время", ConsoleColor.White, ConsoleColor.DarkBlue); 
+
+  
+
+            for (int row = 0; row < list.Count && row < 16; row++) 
+
+            { 
+
+                int y = 4 + row; 
+
+                FileEntry f = list[row]; 
+
+  
+
+                bool selected = row == 0; 
+
+                ConsoleColor fg = selected ? ConsoleColor.Black 
+
+                                            : (f.IsDirectory ? ConsoleColor.Yellow : ConsoleColor.White); 
+
+                ConsoleColor bg = selected ? ConsoleColor.Cyan : ConsoleColor.DarkBlue; 
+
+  
+
+                WriteAt(rx, y, new string(' ', WIDTH - 1 - rx), fg, bg); 
+
+  
+
+                WriteAt(rx, y, f.ShortName().PadRight(8), fg, bg); 
+
+                if (f.HasIcon) 
+
+                    WriteAt(rx + 8, y, Shade.ToString(), fg, bg); 
+
+                else if (!f.IsDirectory) 
+
+                    WriteAt(rx + 9, y, f.Ext.PadRight(3), fg, bg); 
+
+  
+
+                string sizeStr = f.IsDirectory ? "\u25B6КАТАЛОГ\u25C0" : f.Size.ToString(); 
+
+                WriteAt(rx + 14, y, sizeStr.PadLeft(9), fg, bg); 
+
+                WriteAt(rx + 24, y, f.Date, fg, bg); 
+
+                WriteAt(rx + 33, y, f.Time, fg, bg); 
+
+            } 
+
+        } 
+
+  
+
+        static void DrawCommandLine() 
+
+        { 
+
+            WriteAt(0, 23, new string(' ', WIDTH), ConsoleColor.White, ConsoleColor.Black); 
+
+            WriteAt(0, 23, "C:\\NC>_", ConsoleColor.White, ConsoleColor.Black); 
+
+        } 
+
+  
+
+        static void DrawFunctionKeys() 
+
+        { 
+
+            string[] labels = 
+
+            { 
+
+                "Помощь", "Вызов", "Чтение", "Правка", "Копия", 
+
+                "НовИмя", "НовКат", "Удал-е", "Меню", "Выход" 
+
+            }; 
+
+  
+
+            int x = 0; 
+
+            const int y = 24; 
+
+            for (int i = 0; i < labels.Length; i++) 
+
+            { 
+
+                string num = (i + 1).ToString(); 
+
+                WriteAt(x, y, num, ConsoleColor.White, ConsoleColor.Black); 
+
+                x += num.Length; 
+
+                WriteAt(x, y, labels[i], ConsoleColor.Black, ConsoleColor.DarkCyan); 
+
+                x += labels[i].Length; 
+
+                WriteAt(x, y, " ", ConsoleColor.White, ConsoleColor.Black); 
+
+                x++; 
+
+            } 
+
+            if (x < WIDTH) 
+
+                WriteAt(x, y, new string(' ', WIDTH - x), ConsoleColor.Black, ConsoleColor.Black); 
+
+        } 
+
+  
+
+        static void BuildData(out List<FileEntry> c1, out List<FileEntry> c2, out List<FileEntry> c3, 
+
+                               out List<FileEntry> right) 
+
+        { 
+
+            FileEntry F(string name, string ext, long size = 0) => 
+
+                new FileEntry(name, ext, false, size, "25.05.95", "5:00"); 
+
+  
+
+            c1 = new List<FileEntry> 
+
+            { 
+
+                new FileEntry("..", "", true, 0, "11.10.02", "19:48"), 
+
+                new FileEntry("Ajaccgdo", "", false, 417392, "12.10.02", "9:02") { HasIcon = true }, 
+
+                F("nc", "cfg"), F("nc_exit", "com"), F("telemax", "dat"), F("nc_exit", "doc"), 
+
+                F("123view", "exe"), F("arcview", "exe", 81738), F("bitmap", "exe", 54805), F("clp2dib", "exe"), 
+
+                F("dbview", "exe"), F("draw2wmf", "exe"), F("drw2wmf", "exe"), F("ico2dib", "exe"), 
+
+                F("msp2dib", "exe"), F("nc", "exe"), F("ncclean", "exe") 
+
+            }; 
+
+  
+
+            c2 = new List<FileEntry> 
+
+            { 
+
+                F("ncdd", "exe"), F("ncedit", "exe"), F("ncff", "exe"), F("nclabel", "exe"), 
+
+                F("ncmain", "exe"), F("ncnet", "exe"), F("ncsf", "exe"), F("ncsi", "exe"), 
+
+                F("nczip", "exe"), F("packer", "exe"), F("paraview", "exe"), F("pct2dib", "exe"), 
+
+                F("playwave", "exe"), F("q&aview", "exe"), F("rbview", "exe"), F("refview", "exe"), F("saver", "exe") 
+
+            }; 
+
+  
+
+            c3 = new List<FileEntry> 
+
+            { 
+
+                F("telemax", "exe"), F("tif2dib", "exe"), F("vector", "exe"), F("wpb2dib", "exe"), 
+
+                F("wpv2wmf", "exe"), F("wpview", "exe"), F("nc", "ext"), F("nc", "fil"), 
+
+                F("ncpscrip", "hdr"), F("nc", "hlp"), F("ncff", "hlp"), F("telemax", "hlp"), 
+
+                F("nc", "ico"), F("nc", "ini"), F("ncclean", "ini"), F("norton", "ini"), F("telemax", "ini") 
+
+            }; 
+
+  
+
+            right = new List<FileEntry> 
+
+            { 
+
+                new FileEntry("..", "", true, 0, "11.10.02", "19:48"), 
+
+                new FileEntry("123view", "exe", false, 128380, "25.05.95", "5:00"), 
+
+                new FileEntry("4372ansi", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("8502ansi", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("8632ansi", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("8652ansi", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("8662ansi", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("Ajaccgdo", "", false, 417392, "12.10.02", "9:02") { HasIcon = true }, 
+
+                new FileEntry("ansi2437", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("ansi2850", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("ansi2863", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("ansi2865", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("ansi2866", "set", false, 255, "25.05.95", "5:00"), 
+
+                new FileEntry("arcview", "exe", false, 81738, "25.05.95", "5:00"), 
+
+                new FileEntry("bitmap", "exe", false, 54805, "25.05.95", "5:00"), 
+
+                new FileEntry("bug", "nss", false, 16133, "25.05.95", "5:00"), 
+
+                new FileEntry("bungee", "nss", false, 41914, "25.05.95", "5:00"), 
+
+            }; 
+
+        } 
+
+    } 
+
+}
